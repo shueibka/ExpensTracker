@@ -2,7 +2,7 @@
 //  Expense.swift
 //  ExpenseTrackerApp
 //
-//  Created by Balaji Venkatesh on 03/09/23.
+//  Created by shueibka on 04/03/25.
 //
 
 import SwiftUI

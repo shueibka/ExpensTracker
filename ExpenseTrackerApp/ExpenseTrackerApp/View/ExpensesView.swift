@@ -2,7 +2,7 @@
 //  ExpensesView.swift
 //  ExpenseTrackerApp
 //
-//  Created by Balaji Venkatesh on 03/09/23.
+//  Created by shueibka on 03/03/25.
 //
 
 import SwiftUI
@@ -95,7 +95,7 @@ struct ExpensesView: View {
     func filterExpenses(_ text: String) {
         Task.detached(priority: .high) {
             let query = text.lowercased()
-            let filteredExpenses = originalGroupedExpenses.compactMap { group -> GroupedExpenses? in
+            let filteredExpenses = await originalGroupedExpenses.compactMap { group -> GroupedExpenses? in
                 let expenses = group.expenses.filter({ $0.title.lowercased().contains(query) })
                 if expenses.isEmpty {
                     return nil

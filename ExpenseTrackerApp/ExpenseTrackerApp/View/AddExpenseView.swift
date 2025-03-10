@@ -11,23 +11,20 @@ import SwiftData
 struct AddExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    /// View Properties
-    @State private var title: String = ""
-    @State private var subTitle: String = ""
-    @State private var date: Date = .init()
-    @State private var amount: CGFloat = 0
-    @State private var category: Category?
-    /// Categories
+    /// View uses the view model for state and logic.
+    @State private var viewModel = AddExpenseViewModel()
+    /// Category data remains in the view.
     @Query(animation: .snappy) private var allCategories: [Category]
+    
     var body: some View {
         NavigationStack {
             List {
                 Section("Title") {
-                    TextField("Magic Keyboard", text: $title)
+                    TextField("Magic Keyboard", text: $viewModel.title)
                 }
                 
                 Section("Description") {
-                    TextField("Bought a keyboard at the Apple Store", text: $subTitle)
+                    TextField("Bought a keyboard at the Apple Store", text: $viewModel.subTitle)
                 }
                 
                 Section("Amount Spent") {
@@ -35,37 +32,34 @@ struct AddExpenseView: View {
                         Text("$")
                             .fontWeight(.semibold)
                         
-                        TextField("0.0", value: $amount, formatter: formatter)
+                        TextField("0.0",
+                                  value: $viewModel.amount,
+                                  formatter: viewModel.formatter)
                             .keyboardType(.numberPad)
                     }
                 }
                 
                 Section("Date") {
-                    DatePicker("", selection: $date, displayedComponents: [.date])
+                    DatePicker("", selection: $viewModel.date, displayedComponents: [.date])
                         .datePickerStyle(.graphical)
                         .labelsHidden()
                 }
                 
-                /// Category Picker
                 if !allCategories.isEmpty {
                     HStack {
                         Text("Category")
-                        
                         Spacer()
-                        
                         Menu {
                             ForEach(allCategories) { category in
                                 Button(category.categoryName) {
-                                    self.category = category
+                                    viewModel.category = category
                                 }
                             }
-                            
-                            /// None Button
                             Button("None") {
-                                category = nil
+                                viewModel.category = nil
                             }
                         } label: {
-                            if let categoryName = category?.categoryName {
+                            if let categoryName = viewModel.category?.categoryName {
                                 Text(categoryName)
                             } else {
                                 Text("None")
@@ -77,41 +71,18 @@ struct AddExpenseView: View {
             .navigationTitle("Add Expense")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                /// Cancel & Add Button
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .tint(.red)
+                    Button("Cancel") { dismiss() }
+                        .tint(.red)
                 }
-                
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Add", action: addExpense)
-                        .disabled(isAddButtonDisabled)
+                    Button("Add") {
+                        viewModel.addExpense(context: context) { dismiss() }
+                    }
+                    .disabled(viewModel.isAddButtonDisabled)
                 }
             }
         }
-    }
-    
-    /// Disabling Add Button, until all data has been entered
-    var isAddButtonDisabled: Bool {
-        return title.isEmpty || subTitle.isEmpty || amount == .zero
-    }
-    
-    /// Adding Expense to the Swift Data
-    func addExpense() {
-        let expense = Expense(title: title, subTitle: subTitle, amount: amount, date: date, category: category)
-        context.insert(expense)
-        /// Closing View, Once the Data has been Added Successfully!
-        dismiss()
-    }
-    
-    /// Decimal Formatter
-    var formatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        return formatter
     }
 }
 

@@ -10,16 +10,18 @@ import SwiftData
 
 struct CategoriesView: View {
     @Query(animation: .snappy) private var allCategories: [Category]
+    // Explicitly provide the sort descriptor type for UserSettings.
+    @Query(sort: [] as [SortDescriptor<UserSettings>]) private var userSettings: [UserSettings]
     @Environment(\.modelContext) private var context
-    /// View Properties
-    @State private var addCategory: Bool = false
-    @State private var categoryName: String = ""
-    /// Category Delete Request
-    @State private var deleteRequest: Bool = false
-    @State private var requestedCategory: Category?
+    /// Existing view model for add/delete logic.
+    @StateObject private var viewModel = CategoriesViewModel()
+    /// View model for computing summary (total spent & saving goal).
+    @StateObject private var summaryViewModel = CategoriesSummaryViewModel()
+    
     var body: some View {
         NavigationStack {
             List {
+                // Category list header is now the custom navigation title.
                 ForEach(allCategories.sorted(by: {
                     ($0.expenses?.count ?? 0) > ($1.expenses?.count ?? 0)
                 })) { category in
@@ -38,8 +40,8 @@ struct CategoriesView: View {
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button {
-                            deleteRequest.toggle()
-                            requestedCategory = category
+                            viewModel.deleteRequest.toggle()
+                            viewModel.requestedCategory = category
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -47,7 +49,6 @@ struct CategoriesView: View {
                     }
                 }
             }
-            .navigationTitle("Categories")
             .overlay {
                 if allCategories.isEmpty {
                     ContentUnavailableView {
@@ -55,47 +56,54 @@ struct CategoriesView: View {
                     }
                 }
             }
-            /// New Category Add Button
             .toolbar {
+                // Custom principal toolbar item for title and subtitle.
+                ToolbarItem(placement: .principal) {
+                    VStack {
+                        Text("Categories").font(.headline)
+                        if let settings = userSettings.first {
+                            Text("Saving Goal: \(settings.savingGoal, format: .currency(code: Locale.current.currencyCode ?? "USD"))")
+                                .font(.caption)
+                        }
+                    }
+                }
+                // Button to add a new category.
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        addCategory.toggle()
-                    } label: {
+                    Button { viewModel.addCategory.toggle() } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                     }
                 }
+                // Button to navigate to Settings.
+                ToolbarItem(placement: .bottomBar) {
+                    NavigationLink(destination: SettingsView()) {
+                        Text("Settings")
+                    }
+                }
             }
-            .sheet(isPresented: $addCategory) {
-                categoryName = ""
+            .sheet(isPresented: $viewModel.addCategory) {
+                resetCategoryName()
             } content: {
                 NavigationStack {
                     List {
                         Section("Title") {
-                            TextField("General", text: $categoryName)
+                            TextField("General", text: $viewModel.categoryName)
                         }
                     }
                     .navigationTitle("Category Name")
                     .navigationBarTitleDisplayMode(.inline)
-                    /// Add & Cancel Button
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button("Cancel") {
-                                addCategory = false
+                                viewModel.addCategory = false
                             }
                             .tint(.red)
                         }
-                        
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Add") {
-                                /// Adding New Category
-                                let category = Category(categoryName: categoryName)
-                                context.insert(category)
-                                /// Closing View
-                                categoryName = ""
-                                addCategory = false
+                                viewModel.addNewCategory(context: context)
                             }
-                            .disabled(categoryName.isEmpty)
+                            .disabled(viewModel.categoryName.isEmpty)
                         }
                     }
                 }
@@ -104,26 +112,34 @@ struct CategoriesView: View {
                 .interactiveDismissDisabled()
             }
         }
-        .alert("If you delete a category, all the associated expenses will be deleted too.", isPresented: $deleteRequest) {
+        .alert("If you delete a category, all the associated expenses will be deleted too.", isPresented: $viewModel.deleteRequest) {
             Button(role: .destructive) {
-                /// Deleting Category
-                if let requestedCategory {
-                    context.delete(requestedCategory)
-                    self.requestedCategory = nil
-                }
+                viewModel.deleteCategory(context: context)
             } label: {
                 Text("Delete")
             }
-            
             Button(role: .cancel) {
-                requestedCategory = nil
+                viewModel.requestedCategory = nil
             } label: {
                 Text("Cancel")
             }
         }
+        .onAppear {
+            let currentSavingGoal = userSettings.first?.savingGoal ?? 0.0
+            summaryViewModel.updateSummary(with: allCategories, savingGoal: currentSavingGoal)
+        }
+        .onChange(of: allCategories) { newValue in
+            let currentSavingGoal = userSettings.first?.savingGoal ?? 0.0
+            summaryViewModel.updateSummary(with: newValue, savingGoal: currentSavingGoal)
+        }
+        .onChange(of: userSettings.first?.savingGoal) { newValue in
+            let currentSavingGoal = newValue ?? 0.0
+            summaryViewModel.updateSummary(with: allCategories, savingGoal: currentSavingGoal)
+        }
     }
-}
-
-#Preview {
-    CategoriesView()
+    
+    /// Resets the category name when the add sheet is dismissed.
+    private func resetCategoryName() {
+        viewModel.categoryName = ""
+    }
 }
